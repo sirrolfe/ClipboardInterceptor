@@ -1,8 +1,4 @@
-﻿using System;
-using System.Windows.Forms;
-using System.Drawing;
-
-namespace ClipboardInterceptor
+﻿namespace ClipboardInterceptor
 {
     public partial class PinForm : Form
     {

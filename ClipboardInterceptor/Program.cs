@@ -1,27 +1,32 @@
 using System;
-using System.Windows.Forms;
 using System.Threading;
+using System.Windows.Forms;
 
 namespace ClipboardInterceptor
 {
-    static class Program
+    internal static class Program
     {
-        private static Mutex mutex = new Mutex(true, "ClipboardInterceptorInstance");
+        private static readonly Mutex SingleInstance =
+            new Mutex(true, "ClipboardInterceptorInstance");
 
         [STAThread]
-        static void Main()
+        private static void Main()
         {
-            // Ensure only one instance runs
-            if (!mutex.WaitOne(TimeSpan.Zero, true))
+            // pastikan hanya satu instance
+            if (!SingleInstance.WaitOne(TimeSpan.Zero, true))
             {
                 MessageBox.Show(
                     "ClipboardInterceptor is already running.",
                     "Application Running",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Information);
-
                 return;
             }
+
+            // --- simpan default timeout 60 ms sekali saja ---
+            var db = DatabaseManager.Instance;
+            if (db.GetSetting("DecryptionTimeout", null) == null)
+                db.SaveSetting("DecryptionTimeout", "60");
 
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
@@ -32,7 +37,7 @@ namespace ClipboardInterceptor
             }
             finally
             {
-                mutex.ReleaseMutex();
+                SingleInstance.ReleaseMutex();
             }
         }
     }

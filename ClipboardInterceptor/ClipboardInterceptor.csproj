@@ -1,39 +1,36 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk.WindowsDesktop">
+
 	<PropertyGroup>
 		<OutputType>WinExe</OutputType>
-		<TargetFramework>net8.0-windows</TargetFramework>
-		<Nullable>enable</Nullable>
+
+		<!-- Minimal build yang mendukung Clipboard.SetContentWithOptions -->
+		<TargetFramework>net8.0-windows10.0.17763.0</TargetFramework>
+
 		<UseWindowsForms>true</UseWindowsForms>
+		<Nullable>enable</Nullable>
 		<ImplicitUsings>enable</ImplicitUsings>
 		<ApplicationManifest>app.manifest</ApplicationManifest>
 
-		<!-- Tambahkan publish settings -->
-		<PublishSingleFile>false</PublishSingleFile>
-		<SelfContained>false</SelfContained>
+		<!-- Publish settings -->
+		<PublishSingleFile>true</PublishSingleFile>
+		<SelfContained>true</SelfContained>
 		<RuntimeIdentifier>win-x64</RuntimeIdentifier>
+		<!-- atau win-x86 buat 32-bit -->
 		<IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
-		<DebugType>embedded</DebugType>
-		<DebugSymbols>true</DebugSymbols>
 
-		<!-- Ensure native libraries are copied -->
-		<EnableDefaultItems>true</EnableDefaultItems>
-		<GenerateRuntimeConfigurationFiles>true</GenerateRuntimeConfigurationFiles>
+		<EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
 	</PropertyGroup>
 
 	<ItemGroup>
+		<!-- SQLite packages (tetap) -->
 		<PackageReference Include="System.Data.SQLite.Core" Version="1.0.119" />
-		<!-- Tambahkan package untuk ensure SQLite native libraries -->
 		<PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="2.1.11" />
 		<PackageReference Include="System.Data.SQLite" Version="1.0.119" />
 	</ItemGroup>
 
-	<!-- Ensure x64 and x86 SQLite libraries are included -->
 	<ItemGroup>
-		<None Update="x64\SQLite.Interop.dll">
-			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-		</None>
-		<None Update="x86\SQLite.Interop.dll">
-			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-		</None>
+		<None Update="x64\SQLite.Interop.dll" CopyToOutputDirectory="PreserveNewest" />
+		<None Update="x86\SQLite.Interop.dll" CopyToOutputDirectory="PreserveNewest" />
 	</ItemGroup>
+
 </Project>

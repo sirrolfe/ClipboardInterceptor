@@ -1,10 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Drawing;
-using System.Windows.Forms;
-using System.IO;
-using System.Linq;
-using System.Collections.Specialized;
+﻿using System.Collections.Specialized;
 
 namespace ClipboardInterceptor
 {
