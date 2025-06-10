@@ -1,12 +1,20 @@
 # CLIPBOARD INTERCEPTOR
 ClipboardInterceptor is a tool designed to encrypt clipboard content in real time, helping protect sensitive data from clipboard hijacking and infostealer malware. Ideal for users who frequently handle confidential information and want an added layer of security in daily workflows.
 
+
 ## FEATURES:
 - Clipboard Encryption: Encrypts copied text and decrypt instantly
 - PII Detection: Able to detect Personally Identifiable Information (PII) when copied
 - Screenshot Encryption: Able to encrypt and decrypt image via screenshot
 - Image Encryption: Encrypt image when copying from either your folder or web
 - Clipboard History: Automatically detects clipboard changes where you can see them on clipboard history
+
+
+## DOWNLOAD GUIDE
+1) Click on the "Releases" section
+2) Download the "ClipboardInterceptor.v1.3.zip"
+3) Extract the files, then run the "ClipboardInterceptor.exe"
+
 
 ## STEPS
 ### 1) Run the app, and then set the PIN. Right click the icon and click on "Start Protection".
