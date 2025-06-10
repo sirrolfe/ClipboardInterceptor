@@ -11,7 +11,7 @@ ClipboardInterceptor is a tool designed to encrypt clipboard content in real tim
 
 
 ## DOWNLOAD GUIDE
-1) Click on the "Releases" section
+1) Click on the "Releases" section in this repository
 2) Download the "ClipboardInterceptor.v1.3.zip"
 3) Extract the files, then run the "ClipboardInterceptor.exe"
 
