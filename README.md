@@ -1,4 +1,4 @@
-# CLIPBOARD INTERCEPTOR
+# CLIPBOARD INTERCEPTOR (WIP)
 ClipboardInterceptor is a tool designed to encrypt clipboard content in real time, helping protect sensitive data from clipboard hijacking and infostealer malware. Ideal for users who frequently handle confidential information and want an added layer of security in daily workflows.
 
 
