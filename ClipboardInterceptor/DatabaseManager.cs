@@ -85,6 +85,42 @@ namespace ClipboardInterceptor
             }
         }
 
+        // UPDATED: Method untuk cleanup berdasarkan kategori dengan retention dinamis
+        public void CleanupExpiredItemsByCategory()
+        {
+            using (var connection = new SQLiteConnection(ConnectionString))
+            {
+                connection.Open();
+                using (var command = new SQLiteCommand(connection))
+                {
+                    // Get retention settings dari database
+                    int sensitiveHours = int.Parse(GetSetting("SensitiveRetention", "3"));
+                    int normalHours = int.Parse(GetSetting("NormalRetention", "12"));
+
+                    // Cleanup untuk data sensitif berdasarkan setting
+                    command.CommandText = $@"
+                        DELETE FROM ClipboardItems 
+                        WHERE IsSensitive = 1 
+                        AND datetime(Timestamp, '+{sensitiveHours} hours') < datetime('now')";
+                    command.ExecuteNonQuery();
+
+                    // Cleanup untuk data normal berdasarkan setting
+                    command.CommandText = $@"
+                        DELETE FROM ClipboardItems 
+                        WHERE IsSensitive = 0 
+                        AND datetime(Timestamp, '+{normalHours} hours') < datetime('now')";
+                    command.ExecuteNonQuery();
+
+                    // Cleanup items yang sudah expired berdasarkan ExpiresAt
+                    command.CommandText = @"
+                        DELETE FROM ClipboardItems 
+                        WHERE ExpiresAt IS NOT NULL 
+                        AND ExpiresAt < datetime('now')";
+                    command.ExecuteNonQuery();
+                }
+            }
+        }
+
         public long SaveClipboardItem(ClipboardItem item)
         {
             using (var connection = new SQLiteConnection(ConnectionString))
@@ -266,6 +302,53 @@ namespace ClipboardInterceptor
 
                     var result = command.ExecuteScalar();
                     return result != null ? result.ToString() : defaultValue;
+                }
+            }
+        }
+
+        // Method ini tetap ada untuk kompatibilitas
+        public void SetItemRetention(long itemId, int hours)
+        {
+            using (var connection = new SQLiteConnection(ConnectionString))
+            {
+                connection.Open();
+                using (var command = new SQLiteCommand(connection))
+                {
+                    command.CommandText = @"
+                        UPDATE ClipboardItems 
+                        SET ExpiresAt = datetime('now', '+' || @hours || ' hours')
+                        WHERE Id = @id";
+                    command.Parameters.AddWithValue("@hours", hours);
+                    command.Parameters.AddWithValue("@id", itemId);
+                    command.ExecuteNonQuery();
+                }
+            }
+        }
+
+        // OPTIONAL: Method tambahan untuk mendapatkan statistik
+        public (int totalItems, int sensitiveItems, int expiredSoon) GetStatistics()
+        {
+            using (var connection = new SQLiteConnection(ConnectionString))
+            {
+                connection.Open();
+                using (var command = new SQLiteCommand(connection))
+                {
+                    // Total items
+                    command.CommandText = "SELECT COUNT(*) FROM ClipboardItems";
+                    int totalItems = Convert.ToInt32(command.ExecuteScalar());
+
+                    // Sensitive items
+                    command.CommandText = "SELECT COUNT(*) FROM ClipboardItems WHERE IsSensitive = 1";
+                    int sensitiveItems = Convert.ToInt32(command.ExecuteScalar());
+
+                    // Items expiring in next hour
+                    command.CommandText = @"
+                        SELECT COUNT(*) FROM ClipboardItems 
+                        WHERE ExpiresAt IS NOT NULL 
+                        AND ExpiresAt < datetime('now', '+1 hour')";
+                    int expiredSoon = Convert.ToInt32(command.ExecuteScalar());
+
+                    return (totalItems, sensitiveItems, expiredSoon);
                 }
             }
         }

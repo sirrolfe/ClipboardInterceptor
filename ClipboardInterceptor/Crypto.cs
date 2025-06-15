@@ -37,8 +37,8 @@ namespace ClipboardInterceptor
             }
             else
             {
-                // generate 256-bit key
-                masterKey = new byte[32];
+                // generate 128-bit key
+                masterKey = new byte[16];
                 RandomNumberGenerator.Fill(masterKey);
                 SaveMasterKey();
             }
@@ -75,11 +75,11 @@ namespace ClipboardInterceptor
                 try
                 {
                     // Create new key but derive it partially from old one for continuity
-                    byte[] newKey = new byte[32];
+                    byte[] newKey = new byte[16];
                     RandomNumberGenerator.Fill(newKey);
 
                     // Mix in old key for better continuity
-                    for (int i = 0; i < 16; i++)
+                    for (int i = 0; i < 8; i++)
                     {
                         newKey[i] ^= masterKey[i + 8];
                     }
@@ -89,7 +89,7 @@ namespace ClipboardInterceptor
                     File.WriteAllBytes(KeyFile, protectedKey);
 
                     // Update in memory
-                    Array.Copy(newKey, masterKey, 32);
+                    Array.Copy(newKey, masterKey, 16);
                     lastKeyRotation = DateTime.Now;
                 }
                 catch (Exception ex)

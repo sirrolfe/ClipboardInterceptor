@@ -1,4 +1,6 @@
-﻿namespace ClipboardInterceptor
+﻿using Microsoft.Win32;
+
+namespace ClipboardInterceptor
 {
     public partial class SettingsForm : Form
     {
@@ -11,7 +13,7 @@
         private void InitializeComponent()
         {
             this.Text = "ClipboardInterceptor Settings";
-            this.Size = new Size(450, 350);
+            this.Size = new Size(500, 550);
             this.StartPosition = FormStartPosition.CenterScreen;
             this.FormBorderStyle = FormBorderStyle.FixedDialog;
             this.MaximizeBox = false;
@@ -111,6 +113,58 @@
                 Margin = new Padding(0, 10, 0, 10)
             };
 
+            // NEW: Sensitive data notification settings
+            var sensitiveNotificationCheckbox = new CheckBox
+            {
+                Text = "Show notifications for sensitive data",
+                Name = "checkBoxSensitiveNotifications",
+                AutoSize = true,
+                Margin = new Padding(0, 0, 0, 10)
+            };
+
+            // NEW: Data Retention Settings Section
+            var retentionLabel = new Label
+            {
+                Text = "Data Retention Settings",
+                Font = new Font(Font.FontFamily, 10, FontStyle.Bold),
+                AutoSize = true,
+                Margin = new Padding(0, 10, 0, 10)
+            };
+
+            var sensitiveRetentionLabel = new Label
+            {
+                Text = "Sensitive data retention (hours):",
+                AutoSize = true,
+                Margin = new Padding(0, 0, 0, 5)
+            };
+
+            var sensitiveRetentionNumeric = new NumericUpDown
+            {
+                Name = "numericSensitiveRetention",
+                Minimum = 1,
+                Maximum = 24,
+                Value = 3,
+                Width = 80,
+                Margin = new Padding(0, 0, 0, 10)
+            };
+
+            var normalRetentionLabel = new Label
+            {
+                Text = "Normal data retention (hours):",
+                AutoSize = true,
+                Margin = new Padding(0, 0, 0, 5)
+            };
+
+            var normalRetentionNumeric = new NumericUpDown
+            {
+                Name = "numericNormalRetention",
+                Minimum = 1,
+                Maximum = 168,  // 1 week
+                Value = 12,
+                Width = 80,
+                Margin = new Padding(0, 0, 0, 10)
+            };
+
             // History Settings Section
             var historyLabel = new Label
             {
@@ -185,6 +239,15 @@
             generalPanel.Controls.Add(autoLockMinutesLabel);
             generalPanel.Controls.Add(autoLockMinutesNumeric);
             generalPanel.Controls.Add(sensitiveDataDetectionCheckbox);
+            generalPanel.Controls.Add(sensitiveNotificationCheckbox);
+
+            // Add retention settings
+            generalPanel.Controls.Add(retentionLabel);
+            generalPanel.Controls.Add(sensitiveRetentionLabel);
+            generalPanel.Controls.Add(sensitiveRetentionNumeric);
+            generalPanel.Controls.Add(normalRetentionLabel);
+            generalPanel.Controls.Add(normalRetentionNumeric);
+
             generalPanel.Controls.Add(historyLabel);
             generalPanel.Controls.Add(encryptionMarkerLabel);
             generalPanel.Controls.Add(encryptionMarkerTextBox);
@@ -228,6 +291,17 @@
             ((CheckBox)Controls.Find("checkBoxSensitiveData", true)[0]).Checked =
                 bool.Parse(db.GetSetting("DetectSensitiveData", "true"));
 
+            // NEW: Load notification settings
+            ((CheckBox)Controls.Find("checkBoxSensitiveNotifications", true)[0]).Checked =
+                bool.Parse(db.GetSetting("EnableSensitiveNotifications", "true"));
+
+            // NEW: Load retention settings
+            ((NumericUpDown)Controls.Find("numericSensitiveRetention", true)[0]).Value =
+                int.Parse(db.GetSetting("SensitiveRetention", "3"));
+
+            ((NumericUpDown)Controls.Find("numericNormalRetention", true)[0]).Value =
+                int.Parse(db.GetSetting("NormalRetention", "12"));
+
             ((TextBox)Controls.Find("textBoxEncryptionMarker", true)[0]).Text =
                 db.GetSetting("EncryptionMarker", "ENC:");
 
@@ -265,6 +339,17 @@
 
             db.SaveSetting("DetectSensitiveData",
                 ((CheckBox)Controls.Find("checkBoxSensitiveData", true)[0]).Checked.ToString());
+
+            // NEW: Save notification settings
+            db.SaveSetting("EnableSensitiveNotifications",
+                ((CheckBox)Controls.Find("checkBoxSensitiveNotifications", true)[0]).Checked.ToString());
+
+            // NEW: Save retention settings
+            db.SaveSetting("SensitiveRetention",
+                ((NumericUpDown)Controls.Find("numericSensitiveRetention", true)[0]).Value.ToString());
+
+            db.SaveSetting("NormalRetention",
+                ((NumericUpDown)Controls.Find("numericNormalRetention", true)[0]).Value.ToString());
 
             // Only save encryption marker if changed, since it requires restart
             string newMarker = ((TextBox)Controls.Find("textBoxEncryptionMarker", true)[0]).Text;
@@ -316,7 +401,7 @@
             try
             {
                 // Use Registry approach for startup
-                Microsoft.Win32.RegistryKey key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(
+                RegistryKey key = Registry.CurrentUser.OpenSubKey(
                     "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run", true);
 
                 if (enable)

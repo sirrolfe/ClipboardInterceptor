@@ -1,4 +1,4 @@
-﻿// MainForm.cs – ClipboardInterceptor (full)
+﻿// MainForm.cs – ClipboardInterceptor (updated with fixes #3 and #4)
 
 using System;
 using System.Collections.Specialized;
@@ -7,6 +7,8 @@ using System.Drawing;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -74,6 +76,12 @@ namespace ClipboardInterceptor
         private bool screenshotDetectionEnabled = true;
         private bool detectSensitiveData = true;
         private string encryptionMarker = "ENC:";
+
+        // ---------- NEW: Enhanced retention and notification settings
+        private int sensitiveDataRetentionHours = 3;  // Default 3 hours for sensitive
+        private int normalDataRetentionHours = 12;    // Default 12 hours for normal
+        private bool enableSensitiveNotifications = true;
+        private readonly HashSet<string> notifiedSensitiveData = new HashSet<string>();
 
         // ---------- Misc helpers -------------------------------------
         private string lastEncryptedContent = "";
@@ -167,9 +175,11 @@ namespace ClipboardInterceptor
                 }
             }
 
-            // ---------- periodic DB cleanup --------------------------
-            _ = new System.Threading.Timer(_ => DatabaseManager.Instance.CleanupExpiredItems(),
-                                           null, TimeSpan.FromSeconds(30), TimeSpan.FromHours(12));
+            // ---------- UPDATED: Enhanced periodic cleanup with category-based retention
+            _ = new System.Threading.Timer(_ =>
+            {
+                DatabaseManager.Instance.CleanupExpiredItemsByCategory();
+            }, null, TimeSpan.FromMinutes(5), TimeSpan.FromMinutes(30));
         }
 
         // =============================================================
@@ -187,6 +197,11 @@ namespace ClipboardInterceptor
             screenshotDetectionEnabled = bool.Parse(db.GetSetting("ScreenshotDetection", "true"));
             detectSensitiveData = bool.Parse(db.GetSetting("DetectSensitiveData", "true"));
             encryptionMarker = db.GetSetting("EncryptionMarker", "ENC:");
+
+            // NEW: Load retention and notification settings
+            sensitiveDataRetentionHours = int.Parse(db.GetSetting("SensitiveRetention", "3"));
+            normalDataRetentionHours = int.Parse(db.GetSetting("NormalRetention", "12"));
+            enableSensitiveNotifications = bool.Parse(db.GetSetting("EnableSensitiveNotifications", "true"));
         }
 
         // =============================================================
@@ -421,6 +436,9 @@ namespace ClipboardInterceptor
                 item.EncryptedData = enc;
                 item.Preview = $"[{paths.Length} file(s)]";
                 item.IsSensitive = false;
+
+                // NEW: Set retention for files
+                item.ExpiresAt = DateTime.Now.AddHours(normalDataRetentionHours);
             }
             catch (Exception ex) { Debug.WriteLine($"FileProc: {ex.Message}"); }
             finally { AddClipboardFormatListener(Handle); }
@@ -440,6 +458,9 @@ namespace ClipboardInterceptor
                 item.Preview = "[Encrypted Image]";
                 item.IsSensitive = false;
 
+                // NEW: Set retention for images
+                item.ExpiresAt = DateTime.Now.AddHours(normalDataRetentionHours);
+
                 using Bitmap ph = new(200, 100);
                 using Graphics g = Graphics.FromImage(ph);
                 g.FillRectangle(Brushes.LightGray, 0, 0, 200, 100);
@@ -458,7 +479,25 @@ namespace ClipboardInterceptor
             try
             {
                 string txt = Clipboard.GetText();
-                if (detectSensitiveData) item.IsSensitive = IsSensitiveData(txt);
+                if (detectSensitiveData)
+                {
+                    item.IsSensitive = IsSensitiveData(txt);
+                    if (item.IsSensitive)
+                    {
+                        // NEW: Use configurable retention for sensitive data
+                        item.ExpiresAt = DateTime.Now.AddHours(sensitiveDataRetentionHours);
+                        ShowSensitiveDataNotification(txt);
+                    }
+                    else
+                    {
+                        // NEW: Use normal retention for non-sensitive data
+                        item.ExpiresAt = DateTime.Now.AddHours(normalDataRetentionHours);
+                    }
+                }
+                else
+                {
+                    item.ExpiresAt = DateTime.Now.AddHours(normalDataRetentionHours);
+                }
 
                 RemoveClipboardFormatListener(Handle);
 
@@ -472,11 +511,6 @@ namespace ClipboardInterceptor
                 item.ItemType = ClipboardItemType.Text;
                 item.EncryptedData = encB64;
                 item.Preview = Crypto.CreateEncryptedPreview(txt);
-                if (item.IsSensitive)
-                {
-                    item.ExpiresAt = DateTime.Now.AddHours(24);
-                    ShowSensitiveDataNotification();
-                }
             }
             catch (Exception ex) { Debug.WriteLine($"TxtProc: {ex.Message}"); }
             finally { AddClipboardFormatListener(Handle); }
@@ -488,19 +522,52 @@ namespace ClipboardInterceptor
         private bool IsSensitiveData(string t)
         {
             if (string.IsNullOrEmpty(t)) return false;
-            if (Regex.IsMatch(t, @"(?i)pass(word)?|adm(inistrator)?")) return true;
+            if (Regex.IsMatch(t, @"(?i)pass(word)?|admin|administrator")) return true;
             if (Regex.IsMatch(t, @"[a-zA-Z0-9_\-]{20,}")) return true;
-            if (Regex.IsMatch(t, @"^((25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)\.){3}" +
-                   @"(25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)$")) return true;
-            if (Regex.IsMatch(t, @"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}")) return true;
-
+            if (Regex.IsMatch(t, @"\b((25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])\.){3}"
+                               + "(25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])\b")) return true;
             return false;
         }
 
-        private void ShowSensitiveDataNotification()
+        // NEW: Enhanced notification with duplicate prevention
+        private void ShowSensitiveDataNotification(string dataContent = null)
         {
-            trayIcon.ShowBalloonTip(5000, "Sensitive Data",
-                "Sensitive text encrypted – will auto-expire in 24 h.", ToolTipIcon.Warning);
+            if (!enableSensitiveNotifications) return;
+
+            // Prevent duplicate notifications
+            if (dataContent != null)
+            {
+                string hash = ComputeHash(dataContent);
+                if (notifiedSensitiveData.Contains(hash))
+                    return;
+
+                notifiedSensitiveData.Add(hash);
+
+                // Clear old hashes after 1 hour
+                _ = Task.Delay(TimeSpan.FromHours(1)).ContinueWith(_ =>
+                {
+                    lock (notifiedSensitiveData)
+                    {
+                        notifiedSensitiveData.Remove(hash);
+                    }
+                });
+            }
+
+            // Non-intrusive notification with shorter duration
+            trayIcon.BalloonTipIcon = ToolTipIcon.Info;
+            trayIcon.BalloonTipTitle = "Protected";
+            trayIcon.BalloonTipText = $"Sensitive data encrypted (expires in {sensitiveDataRetentionHours}h)";
+            trayIcon.ShowBalloonTip(2000); // Reduced from 5000ms to 2000ms
+        }
+
+        // NEW: Hash computation for duplicate detection
+        private string ComputeHash(string input)
+        {
+            using (SHA256 sha256 = SHA256.Create())
+            {
+                byte[] bytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(input));
+                return Convert.ToBase64String(bytes);
+            }
         }
 
         // =============================================================
