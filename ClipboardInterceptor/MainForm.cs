@@ -522,10 +522,12 @@ namespace ClipboardInterceptor
         private bool IsSensitiveData(string t)
         {
             if (string.IsNullOrEmpty(t)) return false;
-            if (Regex.IsMatch(t, @"(?i)pass(word)?|admin|administrator")) return true;
+            if (Regex.IsMatch(t, @"(?i)pass(word)?|adm(inistrator)?")) return true;
             if (Regex.IsMatch(t, @"[a-zA-Z0-9_\-]{20,}")) return true;
-            if (Regex.IsMatch(t, @"\b((25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])\.){3}"
-                               + "(25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])\b")) return true;
+            if (Regex.IsMatch(t, @"^((25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)\.){3}" +
+                   @"(25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)$")) return true;
+            if (Regex.IsMatch(t, @"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}")) return true;
+
             return false;
         }
 
