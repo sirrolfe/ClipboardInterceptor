@@ -1,4 +1,4 @@
-﻿// MainForm.cs – ClipboardInterceptor (updated with fixes #3 and #4)
+﻿// MainForm.cs – ClipboardInterceptor (updated with PIN validation on startup)
 
 using System;
 using System.Collections.Specialized;
@@ -112,6 +112,37 @@ namespace ClipboardInterceptor
             WindowState = FormWindowState.Minimized;
             Visible = false;
 
+            // ---------- PERBAIKAN: Validasi PIN pada setiap startup ----------
+            if (!Crypto.IsPinSet())
+            {
+                // Jika PIN belum diset, minta user untuk set PIN
+                using var pinForm = new PinForm(true); // true untuk set PIN baru
+                if (pinForm.ShowDialog() == DialogResult.OK)
+                {
+                    Crypto.SetPIN(pinForm.PIN);
+                    MessageBox.Show("Security PIN set successfully.",
+                                    "PIN Set", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    isAuthenticated = true;
+                }
+                else
+                {
+                    // Jika user cancel, tutup aplikasi
+                    MessageBox.Show("PIN is required to run ClipboardInterceptor.",
+                                    "PIN Required", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    Application.Exit();
+                    return;
+                }
+            }
+            else
+            {
+                // PIN sudah diset, minta validasi PIN
+                if (!ValidatePinOnStartup())
+                {
+                    Application.Exit();
+                    return;
+                }
+            }
+
             // ---------- tray icon + menu -----------------------------
             trayIcon = new NotifyIcon
             {
@@ -166,23 +197,72 @@ namespace ClipboardInterceptor
                 inactivityTimer.Start();
             }
 
-            // ---------- ensure PIN -----------------------------------
-            if (!Crypto.IsPinSet())
-            {
-                using var pinForm = new PinForm();
-                if (pinForm.ShowDialog() == DialogResult.OK)
-                {
-                    Crypto.SetPIN(pinForm.PIN);
-                    MessageBox.Show("Security PIN set successfully.",
-                                    "PIN Set", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                }
-            }
-
             // ---------- UPDATED: Enhanced periodic cleanup with category-based retention
             _ = new System.Threading.Timer(_ =>
             {
                 DatabaseManager.Instance.CleanupExpiredItemsByCategory();
             }, null, TimeSpan.FromMinutes(5), TimeSpan.FromMinutes(30));
+        }
+
+        // ---------- Method baru untuk validasi PIN startup ----------
+        private bool ValidatePinOnStartup()
+        {
+            int maxAttempts = 3;
+            int currentAttempt = 0;
+
+            while (currentAttempt < maxAttempts)
+            {
+                // Check lockout status
+                var (isLocked, remainingMinutes) = Crypto.GetLockoutStatus();
+                if (isLocked)
+                {
+                    MessageBox.Show(
+                        $"Too many failed PIN attempts. Please try again in {remainingMinutes} minutes.",
+                        "Authentication Locked",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Warning);
+                    return false;
+                }
+
+                using var pinForm = new PinForm(false); // false untuk validasi PIN
+                pinForm.Text = $"Enter PIN to start ClipboardInterceptor (Attempt {currentAttempt + 1}/{maxAttempts})";
+
+                if (pinForm.ShowDialog() != DialogResult.OK)
+                {
+                    // User cancelled
+                    return false;
+                }
+
+                if (Crypto.VerifyPIN(pinForm.PIN))
+                {
+                    // PIN benar, set authenticated flag
+                    isAuthenticated = true;
+                    return true;
+                }
+                else
+                {
+                    currentAttempt++;
+                    if (currentAttempt < maxAttempts)
+                    {
+                        MessageBox.Show(
+                            $"Incorrect PIN. {maxAttempts - currentAttempt} attempts remaining.",
+                            "Authentication Failed",
+                            MessageBoxButtons.OK,
+                            MessageBoxIcon.Error);
+                    }
+                    else
+                    {
+                        MessageBox.Show(
+                            "Maximum PIN attempts exceeded. Application will close.",
+                            "Authentication Failed",
+                            MessageBoxButtons.OK,
+                            MessageBoxIcon.Error);
+                        return false;
+                    }
+                }
+            }
+
+            return false;
         }
 
         // =============================================================
