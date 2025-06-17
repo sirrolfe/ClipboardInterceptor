@@ -137,7 +137,10 @@ namespace ClipboardInterceptor
             });
 
             trayIcon.ContextMenuStrip = menu;
-            trayIcon.DoubleClick += (_, __) => OnShowHistory(_, __);
+            trayIcon.DoubleClick += (sender, e) =>
+            {
+                OnShowHistory(sender, e);
+            };
 
             // ---------- timers ---------------------------------------
             autoClearTimer = new() { Interval = 60_000 };
@@ -390,31 +393,137 @@ namespace ClipboardInterceptor
 
             try
             {
+                // CRITICAL: Remove listener immediately to prevent re-entry
+                RemoveClipboardFormatListener(Handle);
+
+                // Step 1: Quickly capture what's in clipboard
+                string capturedText = null;
+                Image capturedImage = null;
+                StringCollection capturedFiles = null;
+
                 bool hasText = Clipboard.ContainsText();
                 bool hasImage = Clipboard.ContainsImage();
                 bool hasFiles = Clipboard.ContainsFileDropList();
 
+                // Quick capture based on content type
                 if (hasText)
                 {
-                    string current = Clipboard.GetText();
-                    if (current.StartsWith(encryptionMarker) || string.IsNullOrWhiteSpace(current))
+                    capturedText = Clipboard.GetText();
+                    // Skip if already encrypted
+                    if (capturedText.StartsWith(encryptionMarker) || string.IsNullOrWhiteSpace(capturedText))
+                    {
                         return;
+                    }
+                }
+                else if (hasImage && !hasText)
+                {
+                    capturedImage = Clipboard.GetImage();
+                }
+                else if (hasFiles)
+                {
+                    capturedFiles = Clipboard.GetFileDropList();
+                }
+                else
+                {
+                    return; // Nothing to process
                 }
 
+                // Step 2: IMMEDIATELY clear clipboard to minimize exposure window
+                Clipboard.Clear();
+                Thread.Sleep(5); // Very short delay to ensure clear
+
+                // Step 3: Set temporary placeholder to block snooping
+                Clipboard.SetText("[Protected by ClipboardInterceptor]");
+                Thread.Sleep(5);
+
+                // Step 4: Now process the captured content safely
                 string contentId = Guid.NewGuid().ToString();
                 var item = new ClipboardItem { Timestamp = DateTime.Now, ContentId = contentId };
 
-                if (hasFiles) ProcessFileContent(item, contentId);
-                else if (hasImage && !hasText) ProcessImageContent(item, contentId);
-                else if (hasText) ProcessTextContent(item, contentId);
+                // Process based on what we captured
+                if (capturedFiles != null)
+                {
+                    // Convert StringCollection to string array
+                    string[] paths = new string[capturedFiles.Count];
+                    capturedFiles.CopyTo(paths, 0);
 
+                    string enc = Crypto.EncryptFilePaths(paths, contentId);
+                    Clipboard.SetText($"{encryptionMarker}{contentId}|{enc}");
+
+                    item.ItemType = ClipboardItemType.File;
+                    item.EncryptedData = enc;
+                    item.Preview = $"[{paths.Length} file(s)]";
+                    item.IsSensitive = false;
+                    item.ExpiresAt = DateTime.Now.AddHours(normalDataRetentionHours);
+                }
+                else if (capturedImage != null)
+                {
+                    string enc = Crypto.EncryptImage(capturedImage, contentId);
+                    item.ItemType = ClipboardItemType.Image;
+                    item.EncryptedData = enc;
+                    item.Preview = "[Encrypted Image]";
+                    item.IsSensitive = false;
+                    item.ExpiresAt = DateTime.Now.AddHours(normalDataRetentionHours);
+
+                    // Create encrypted placeholder image
+                    using (Bitmap ph = new Bitmap(200, 100))
+                    using (Graphics g = Graphics.FromImage(ph))
+                    {
+                        g.FillRectangle(Brushes.LightGray, 0, 0, 200, 100);
+                        g.DrawString("Encrypted Image", new Font("Arial", 10), Brushes.Black, 10, 40);
+                        Clipboard.SetImage(ph);
+                    }
+                }
+                else if (capturedText != null)
+                {
+                    // Check if sensitive
+                    if (detectSensitiveData)
+                    {
+                        item.IsSensitive = IsSensitiveData(capturedText);
+                        item.ExpiresAt = DateTime.Now.AddHours(
+                            item.IsSensitive ? sensitiveDataRetentionHours : normalDataRetentionHours);
+
+                        if (item.IsSensitive)
+                        {
+                            ShowSensitiveDataNotification(capturedText);
+                        }
+                    }
+                    else
+                    {
+                        item.ExpiresAt = DateTime.Now.AddHours(normalDataRetentionHours);
+                    }
+
+                    // Encrypt the text
+                    byte[] encData = Crypto.Encrypt(capturedText, contentId);
+                    string encB64 = Convert.ToBase64String(encData);
+                    string payload = $"{encryptionMarker}{contentId}|{encB64}";
+
+                    // Set encrypted content
+                    Clipboard.SetText(payload);
+
+                    item.ItemType = ClipboardItemType.Text;
+                    item.EncryptedData = encB64;
+                    item.Preview = Crypto.CreateEncryptedPreview(capturedText);
+                }
+
+                // Save to database if we processed something
                 if (item.EncryptedData != null)
+                {
                     DatabaseManager.Instance.SaveClipboardItem(item);
+                }
             }
-            catch (Exception ex) { Debug.WriteLine($"ProcClip: {ex.Message}"); }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"ProcClip: {ex.Message}");
+            }
             finally
             {
-                lock (clipboardLock) { isProcessingClipboard = false; }
+                // Always re-enable listener
+                AddClipboardFormatListener(Handle);
+                lock (clipboardLock)
+                {
+                    isProcessingClipboard = false;
+                }
             }
         }
 
