@@ -1,4 +1,4 @@
-﻿// MainForm.cs – ClipboardInterceptor (updated with PIN validation on startup)
+﻿// MainForm.cs
 
 using System;
 using System.Collections.Specialized;
@@ -607,103 +607,103 @@ namespace ClipboardInterceptor
             }
         }
 
-        // ---------- FILES -------------------------------------------
-        private void ProcessFileContent(ClipboardItem item, string cid)
-        {
-            try
-            {
-                var files = Clipboard.GetFileDropList();
-                string[] paths = new string[files.Count]; files.CopyTo(paths, 0);
+        //// ---------- FILES -------------------------------------------
+        //private void ProcessFileContent(ClipboardItem item, string cid)
+        //{
+        //    try
+        //    {
+        //        var files = Clipboard.GetFileDropList();
+        //        string[] paths = new string[files.Count]; files.CopyTo(paths, 0);
 
-                RemoveClipboardFormatListener(Handle);
+        //        RemoveClipboardFormatListener(Handle);
 
-                string enc = Crypto.EncryptFilePaths(paths, cid);
-                Clipboard.Clear(); Thread.Sleep(10);
-                Clipboard.SetText($"{encryptionMarker}{cid}|{enc}");
+        //        string enc = Crypto.EncryptFilePaths(paths, cid);
+        //        Clipboard.Clear(); Thread.Sleep(10);
+        //        Clipboard.SetText($"{encryptionMarker}{cid}|{enc}");
 
-                item.ItemType = ClipboardItemType.File;
-                item.EncryptedData = enc;
-                item.Preview = $"[{paths.Length} file(s)]";
-                item.IsSensitive = false;
+        //        item.ItemType = ClipboardItemType.File;
+        //        item.EncryptedData = enc;
+        //        item.Preview = $"[{paths.Length} file(s)]";
+        //        item.IsSensitive = false;
 
-                // NEW: Set retention for files
-                item.ExpiresAt = DateTime.Now.AddHours(normalDataRetentionHours);
-            }
-            catch (Exception ex) { Debug.WriteLine($"FileProc: {ex.Message}"); }
-            finally { AddClipboardFormatListener(Handle); }
-        }
+        //        // NEW: Set retention for files
+        //        item.ExpiresAt = DateTime.Now.AddHours(normalDataRetentionHours);
+        //    }
+        //    catch (Exception ex) { Debug.WriteLine($"FileProc: {ex.Message}"); }
+        //    finally { AddClipboardFormatListener(Handle); }
+        //}
 
-        // ---------- IMAGE -------------------------------------------
-        private void ProcessImageContent(ClipboardItem item, string cid)
-        {
-            try
-            {
-                Image img = Clipboard.GetImage();
-                RemoveClipboardFormatListener(Handle);
+        //// ---------- IMAGE -------------------------------------------
+        //private void ProcessImageContent(ClipboardItem item, string cid)
+        //{
+        //    try
+        //    {
+        //        Image img = Clipboard.GetImage();
+        //        RemoveClipboardFormatListener(Handle);
 
-                string enc = Crypto.EncryptImage(img, cid);
-                item.ItemType = ClipboardItemType.Image;
-                item.EncryptedData = enc;
-                item.Preview = "[Encrypted Image]";
-                item.IsSensitive = false;
+        //        string enc = Crypto.EncryptImage(img, cid);
+        //        item.ItemType = ClipboardItemType.Image;
+        //        item.EncryptedData = enc;
+        //        item.Preview = "[Encrypted Image]";
+        //        item.IsSensitive = false;
 
-                // NEW: Set retention for images
-                item.ExpiresAt = DateTime.Now.AddHours(normalDataRetentionHours);
+        //        // NEW: Set retention for images
+        //        item.ExpiresAt = DateTime.Now.AddHours(normalDataRetentionHours);
 
-                using Bitmap ph = new(200, 100);
-                using Graphics g = Graphics.FromImage(ph);
-                g.FillRectangle(Brushes.LightGray, 0, 0, 200, 100);
-                g.DrawString("Encrypted Image", new Font("Arial", 10), Brushes.Black, 10, 40);
+        //        using Bitmap ph = new(200, 100);
+        //        using Graphics g = Graphics.FromImage(ph);
+        //        g.FillRectangle(Brushes.LightGray, 0, 0, 200, 100);
+        //        g.DrawString("Encrypted Image", new Font("Arial", 10), Brushes.Black, 10, 40);
 
-                Clipboard.Clear(); Thread.Sleep(10);
-                Clipboard.SetImage(ph);
-            }
-            catch (Exception ex) { Debug.WriteLine($"ImgProc: {ex.Message}"); }
-            finally { AddClipboardFormatListener(Handle); }
-        }
+        //        Clipboard.Clear(); Thread.Sleep(10);
+        //        Clipboard.SetImage(ph);
+        //    }
+        //    catch (Exception ex) { Debug.WriteLine($"ImgProc: {ex.Message}"); }
+        //    finally { AddClipboardFormatListener(Handle); }
+        //}
 
-        // ---------- TEXT -------------------------------------------
-        private void ProcessTextContent(ClipboardItem item, string cid)
-        {
-            try
-            {
-                string txt = Clipboard.GetText();
-                if (detectSensitiveData)
-                {
-                    item.IsSensitive = IsSensitiveData(txt);
-                    if (item.IsSensitive)
-                    {
-                        // NEW: Use configurable retention for sensitive data
-                        item.ExpiresAt = DateTime.Now.AddHours(sensitiveDataRetentionHours);
-                        ShowSensitiveDataNotification(txt);
-                    }
-                    else
-                    {
-                        // NEW: Use normal retention for non-sensitive data
-                        item.ExpiresAt = DateTime.Now.AddHours(normalDataRetentionHours);
-                    }
-                }
-                else
-                {
-                    item.ExpiresAt = DateTime.Now.AddHours(normalDataRetentionHours);
-                }
+        //// ---------- TEXT -------------------------------------------
+        //private void ProcessTextContent(ClipboardItem item, string cid)
+        //{
+        //    try
+        //    {
+        //        string txt = Clipboard.GetText();
+        //        if (detectSensitiveData)
+        //        {
+        //            item.IsSensitive = IsSensitiveData(txt);
+        //            if (item.IsSensitive)
+        //            {
+        //                // NEW: Use configurable retention for sensitive data
+        //                item.ExpiresAt = DateTime.Now.AddHours(sensitiveDataRetentionHours);
+        //                ShowSensitiveDataNotification(txt);
+        //            }
+        //            else
+        //            {
+        //                // NEW: Use normal retention for non-sensitive data
+        //                item.ExpiresAt = DateTime.Now.AddHours(normalDataRetentionHours);
+        //            }
+        //        }
+        //        else
+        //        {
+        //            item.ExpiresAt = DateTime.Now.AddHours(normalDataRetentionHours);
+        //        }
 
-                RemoveClipboardFormatListener(Handle);
+        //        RemoveClipboardFormatListener(Handle);
 
-                byte[] encData = Crypto.Encrypt(txt, cid);
-                string encB64 = Convert.ToBase64String(encData);
-                string payload = $"{encryptionMarker}{cid}|{encB64}";
+        //        byte[] encData = Crypto.Encrypt(txt, cid);
+        //        string encB64 = Convert.ToBase64String(encData);
+        //        string payload = $"{encryptionMarker}{cid}|{encB64}";
 
-                Clipboard.Clear(); Thread.Sleep(50);
-                Clipboard.SetText(payload);
+        //        Clipboard.Clear(); Thread.Sleep(50);
+        //        Clipboard.SetText(payload);
 
-                item.ItemType = ClipboardItemType.Text;
-                item.EncryptedData = encB64;
-                item.Preview = Crypto.CreateEncryptedPreview(txt);
-            }
-            catch (Exception ex) { Debug.WriteLine($"TxtProc: {ex.Message}"); }
-            finally { AddClipboardFormatListener(Handle); }
-        }
+        //        item.ItemType = ClipboardItemType.Text;
+        //        item.EncryptedData = encB64;
+        //        item.Preview = Crypto.CreateEncryptedPreview(txt);
+        //    }
+        //    catch (Exception ex) { Debug.WriteLine($"TxtProc: {ex.Message}"); }
+        //    finally { AddClipboardFormatListener(Handle); }
+        //}
 
         // =============================================================
         //  Helpers
@@ -925,7 +925,7 @@ namespace ClipboardInterceptor
         }
 
         // =============================================================
-        //  Graceful shutdown
+        //  Shutdown
         // =============================================================
         protected override void OnFormClosing(FormClosingEventArgs e)
         {
